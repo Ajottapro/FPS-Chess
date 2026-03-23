@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FPS Chess — Conquest</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- PeerJS for P2P multiplayer -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- Three.js for 3D combat -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ SCREENS ═══════════════════════════════════════ -->
+
+<!-- MENU SCREEN -->
+<div id="screen-menu" class="screen active">
+  <div class="menu-bg">
+    <div class="grid-overlay"></div>
+    <div class="scanlines"></div>
+  </div>
+  <div class="menu-content">
+    <div class="logo">
+      <span class="logo-fps">FPS</span>
+      <span class="logo-chess">CHESS</span>
+      <div class="logo-sub">CONQUEST</div>
+    </div>
+    <nav class="menu-nav">
+      <button class="btn-menu btn-primary" onclick="showScreen('screen-lobby')">⚔ MULTIJUGADOR</button>
+      <button class="btn-menu" onclick="startVsBot()">🤖 VS BOT</button>
+      <button class="btn-menu" onclick="showScreen('screen-training')">🎯 ENTRENAMIENTO</button>
+      <button class="btn-menu" onclick="showScreen('screen-ranking')">🏆 RANKING</button>
+      <button class="btn-menu btn-small" onclick="showScreen('screen-help')">? AYUDA</button>
+    </nav>
+    <div class="version-tag">v1.0 — PROTOTIPO</div>
+  </div>
+</div>
+
+<!-- LOBBY SCREEN -->
+<div id="screen-lobby" class="screen">
+  <div class="menu-bg"><div class="grid-overlay"></div><div class="scanlines"></div></div>
+  <div class="lobby-content">
+    <h2 class="section-title">MULTIJUGADOR</h2>
+
+    <div class="player-setup">
+      <label>TU NOMBRE</label>
+      <input type="text" id="player-name" placeholder="Comandante..." maxlength="16" value=""/>
+      <div class="color-select">
+        <button class="color-btn active" data-color="white" onclick="selectColor('white',this)">♔ BLANCAS</button>
+        <button class="color-btn" data-color="black" onclick="selectColor('black',this)">♚ NEGRAS</button>
+        <button class="color-btn" data-color="random" onclick="selectColor('random',this)">🎲 ALEATORIO</button>
+      </div>
+    </div>
+
+    <div class="lobby-panels">
+      <div class="lobby-panel">
+        <h3>🔍 MATCHMAKING</h3>
+        <p>Busca un rival online automáticamente.</p>
+        <button class="btn-action" id="btn-matchmaking" onclick="startMatchmaking()">BUSCAR PARTIDA</button>
+        <div id="matchmaking-status" class="status-text"></div>
+      </div>
+      <div class="lobby-panel">
+        <h3>🔒 SALA PRIVADA</h3>
+        <p>Crea o únete con un código.</p>
+        <button class="btn-action" onclick="createPrivateRoom()">CREAR SALA</button>
+        <div class="room-join">
+          <input type="text" id="room-code-input" placeholder="Código de sala..." maxlength="8"/>
+          <button class="btn-action btn-sm" onclick="joinPrivateRoom()">UNIRSE</button>
+        </div>
+        <div id="room-code-display" class="room-code-display"></div>
+      </div>
+    </div>
+
+    <div id="peer-id-display" class="peer-info"></div>
+    <button class="btn-back" onclick="showScreen('screen-menu')">← VOLVER</button>
+  </div>
+</div>
+
+<!-- CHESS BOARD SCREEN -->
+<div id="screen-chess" class="screen">
+  <div class="chess-hud">
+    <div class="hud-left">
+      <div id="hud-player-white" class="hud-player">
+        <span class="hud-piece-icon">♔</span>
+        <span id="hud-name-white">Jugador 1</span>
+      </div>
+    </div>
+    <div class="hud-center">
+      <div id="turn-indicator" class="turn-indicator">TURNO: BLANCAS</div>
+      <div id="chess-timer" class="chess-timer">10:00</div>
+      <div id="game-status" class="game-status"></div>
+    </div>
+    <div class="hud-right">
+      <div id="hud-player-black" class="hud-player">
+        <span class="hud-piece-icon">♚</span>
+        <span id="hud-name-black">Jugador 2</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="board-container">
+    <div id="chess-board"></div>
+    <div id="captured-pieces-white" class="captured-pieces"></div>
+    <div id="captured-pieces-black" class="captured-pieces"></div>
+  </div>
+
+  <div class="chess-bottom-bar">
+    <button class="btn-small-ui" onclick="offerDraw()">½ TABLAS</button>
+    <button class="btn-small-ui btn-danger" onclick="resignGame()">🏳 RENDIRSE</button>
+    <div id="move-history" class="move-history"></div>
+  </div>
+</div>
+
+<!-- FPS COMBAT SCREEN -->
+<div id="screen-fps" class="screen">
+  <canvas id="fps-canvas"></canvas>
+
+  <!-- FPS HUD -->
+  <div id="fps-hud">
+    <div class="fps-hud-top">
+      <div class="combatant attacker">
+        <div id="fps-attacker-name" class="combatant-name">ATACANTE</div>
+        <div class="hp-bar-wrap">
+          <div id="fps-attacker-hp-bar" class="hp-bar hp-attacker" style="width:100%"></div>
+        </div>
+        <span id="fps-attacker-hp">100</span> HP
+      </div>
+      <div class="combat-center">
+        <div id="combat-title" class="combat-title">⚔ COMBATE</div>
+        <div id="combat-timer" class="combat-timer">30</div>
+      </div>
+      <div class="combatant defender">
+        <div id="fps-defender-name" class="combatant-name">DEFENSOR</div>
+        <div class="hp-bar-wrap">
+          <div id="fps-defender-hp-bar" class="hp-bar hp-defender" style="width:100%"></div>
+        </div>
+        <span id="fps-defender-hp">100</span> HP
+      </div>
+    </div>
+
+    <div class="fps-hud-bottom">
+      <div id="fps-crosshair" class="crosshair">+</div>
+      <div class="weapon-info">
+        <span id="fps-weapon-name" class="weapon-name">CUCHILLO</span>
+        <div id="fps-ability-bar" class="ability-bar">
+          <div id="fps-ability-fill" class="ability-fill" style="width:0%"></div>
+        </div>
+        <span class="ability-label">HABILIDAD [E]</span>
+      </div>
+      <div id="fps-ammo" class="ammo-display"></div>
+    </div>
+
+    <div id="fps-hit-flash" class="hit-flash"></div>
+    <div id="fps-kill-msg" class="kill-msg"></div>
+    <div id="fps-controls-hint" class="controls-hint">WASD Mover · Click Atacar · E Habilidad · ESC Salir (debug)</div>
+  </div>
+
+  <!-- Pointer lock overlay -->
+  <div id="fps-click-to-play" class="click-to-play">
+    <div class="ctp-box">
+      <div id="ctp-piece-icon" class="ctp-icon">⚔</div>
+      <div id="ctp-title" class="ctp-title">COMBATE INICIADO</div>
+      <div id="ctp-desc" class="ctp-desc">Haz clic para jugar en primera persona</div>
+      <button class="btn-action" onclick="enterPointerLock()">▶ ENTRAR AL COMBATE</button>
+      <div class="ctp-hint">o espera al oponente online...</div>
+    </div>
+  </div>
+</div>
+
+<!-- TRAINING SCREEN -->
+<div id="screen-training" class="screen">
+  <div class="menu-bg"><div class="grid-overlay"></div></div>
+  <div class="training-content">
+    <h2 class="section-title">ENTRENAMIENTO FPS</h2>
+    <p class="subtitle">Practica el combate con cada tipo de pieza</p>
+    <div class="piece-grid">
+      <div class="piece-card" onclick="startTraining('pawn')">
+        <div class="piece-symbol">♟</div>
+        <div class="piece-name">PEÓN</div>
+        <div class="piece-desc">Cuchillo · Rápido</div>
+        <div class="piece-stats"><span>❤ 80</span><span>⚡ Alta</span></div>
+      </div>
+      <div class="piece-card" onclick="startTraining('rook')">
+        <div class="piece-symbol">♜</div>
+        <div class="piece-name">TORRE</div>
+        <div class="piece-desc">Escopeta · Tanque</div>
+        <div class="piece-stats"><span>❤ 200</span><span>⚡ Baja</span></div>
+      </div>
+      <div class="piece-card" onclick="startTraining('knight')">
+        <div class="piece-symbol">♞</div>
+        <div class="piece-name">CABALLO</div>
+        <div class="piece-desc">Pistolas duales · Dash</div>
+        <div class="piece-stats"><span>❤ 100</span><span>⚡ Muy alta</span></div>
+      </div>
+      <div class="piece-card" onclick="startTraining('bishop')">
+        <div class="piece-symbol">♝</div>
+        <div class="piece-name">ALFIL</div>
+        <div class="piece-desc">Rifle de francotirador</div>
+        <div class="piece-stats"><span>❤ 90</span><span>⚡ Media</span></div>
+      </div>
+      <div class="piece-card piece-card-special" onclick="startTraining('queen')">
+        <div class="piece-symbol">♛</div>
+        <div class="piece-name">REINA</div>
+        <div class="piece-desc">Arsenal completo · OP</div>
+        <div class="piece-stats"><span>❤ 150</span><span>⚡ Alta</span></div>
+      </div>
+      <div class="piece-card piece-card-special" onclick="startTraining('king')">
+        <div class="piece-symbol">♚</div>
+        <div class="piece-name">REY</div>
+        <div class="piece-desc">Martillo + Escudo</div>
+        <div class="piece-stats"><span>❤ 180</span><span>⚡ Media</span></div>
+      </div>
+    </div>
+    <button class="btn-back" onclick="showScreen('screen-menu')">← VOLVER</button>
+  </div>
+</div>
+
+<!-- RANKING SCREEN -->
+<div id="screen-ranking" class="screen">
+  <div class="menu-bg"><div class="grid-overlay"></div></div>
+  <div class="ranking-content">
+    <h2 class="section-title">🏆 RANKING GLOBAL</h2>
+    <div id="ranking-table" class="ranking-table"></div>
+    <button class="btn-back" onclick="showScreen('screen-menu')">← VOLVER</button>
+  </div>
+</div>
+
+<!-- HELP SCREEN -->
+<div id="screen-help" class="screen">
+  <div class="menu-bg"><div class="grid-overlay"></div></div>
+  <div class="help-content">
+    <h2 class="section-title">CÓMO JUGAR</h2>
+    <div class="help-grid">
+      <div class="help-block">
+        <h3>♟ AJEDREZ</h3>
+        <p>Juega como ajedrez normal. Cuando una pieza capture a otra, ¡comienza el combate FPS! El ganador del combate determina quién sobrevive en el tablero.</p>
+      </div>
+      <div class="help-block">
+        <h3>🎯 FPS COMBATE</h3>
+        <p><b>WASD</b> — Mover<br><b>Ratón</b> — Apuntar<br><b>Click</b> — Atacar<br><b>E</b> — Habilidad especial<br><b>Shift</b> — Sprint/Dash</p>
+      </div>
+      <div class="help-block">
+        <h3>⚔ PIEZAS</h3>
+        <p>Cada pieza tiene HP, arma y habilidad únicos. El defensor tiene ventaja inicial de posición. Si el atacante gana, captura. Si pierde, su pieza es eliminada.</p>
+      </div>
+      <div class="help-block">
+        <h3>🌐 ONLINE</h3>
+        <p>Conecta mediante PeerJS P2P. Comparte tu código de sala con un amigo o usa matchmaking automático. En caso de desconexión, tienes 30 segundos para reconectar.</p>
+      </div>
+    </div>
+    <button class="btn-back" onclick="showScreen('screen-menu')">← VOLVER</button>
+  </div>
+</div>
+
+<!-- GAME OVER SCREEN -->
+<div id="screen-gameover" class="screen">
+  <div class="menu-bg"><div class="grid-overlay"></div></div>
+  <div class="gameover-content">
+    <div id="gameover-icon" class="gameover-icon">👑</div>
+    <div id="gameover-title" class="gameover-title">VICTORIA</div>
+    <div id="gameover-subtitle" class="gameover-subtitle"></div>
+    <div id="gameover-stats" class="gameover-stats"></div>
+    <div class="gameover-buttons">
+      <button class="btn-action" onclick="rematch()">🔄 REVANCHA</button>
+      <button class="btn-menu" onclick="showScreen('screen-menu')">🏠 MENÚ</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATION TOAST -->
+<div id="toast" class="toast"></div>
+
+<script src="game.js"></script>
+</body>
+</html>
